@@ -1,6 +1,6 @@
 name: Release
 
-# غيّر الرقم بملف VERSION وادفع على main ← يبني APK و IPA وينشرهم بالـ Releases
+# غيّر الرقم بملف VERSION وادفع على main ← يبني APK و IPA وينشرهم بالـ Releases (برمجة وتطوير ابراهيم الخزرجي)
 on:
   push:
     branches: ["main"]
