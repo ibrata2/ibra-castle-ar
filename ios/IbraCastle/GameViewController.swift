@@ -182,7 +182,7 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
 
     func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
         guard let p = anchor as? ARPlaneAnchor, !placed else { return }
-        let plane = SCNPlane(width: CGFloat(p.planeExtent.width), height: CGFloat(p.planeExtent.height))
+        let plane = SCNPlane(width: CGFloat(p.extent.x), height: CGFloat(p.extent.z))
         let m = SCNMaterial()
         m.diffuse.contents = UIColor(red: 1, green: 0.82, blue: 0.35, alpha: 0.28)
         m.lightingModel = .constant
@@ -197,8 +197,8 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
     func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
         guard let p = anchor as? ARPlaneAnchor, let pn = node.childNodes.first(where: { $0.name == "plane" }),
               let plane = pn.geometry as? SCNPlane else { return }
-        plane.width = CGFloat(p.planeExtent.width)
-        plane.height = CGFloat(p.planeExtent.height)
+        plane.width = CGFloat(p.extent.x)
+        plane.height = CGFloat(p.extent.z)
         pn.simdPosition = p.center
         pn.isHidden = placed
     }
