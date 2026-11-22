@@ -5,7 +5,27 @@
 
 **برمجة وتطوير ابراهيم الخزرجي** — [ibraprogram.netlify.app](https://ibraprogram.netlify.app/) · [Telegram](https://t.me/ibraprogram) · TikTok: ibraprogram
 
+## ⬇️ التحميل
+من قسم **Releases**:
+- **IBRA-CASTLE-AR.apk** — أندرويد (جهاز يدعم ARCore)
+- **IBRA-CASTLE-AR.ipa** — آيفون (غير موقّع — وقّعه بشهادتك)، iOS 15+
+
+## النسخ بالمستودع
+| المجلد | الوصف |
+|---|---|
+| `android/` | **النسخة الأصلية للأندرويد** — Kotlin + ARCore + OpenGL ES (مجسمات كرتونية مبنية بالكود) |
+| `ios/` | **النسخة الأصلية للآيفون** — Swift + ARKit + SceneKit |
+| `Assets/IbraCastle/` | نسخة Unity (AR Foundation) — اختيارية لمن يريد يطوّر بالـ Unity |
+| `.github/workflows/` | بناء APK و IPA تلقائياً على GitHub Actions، وأي Tag يبدأ بـ `v` ينشرهم بالـ Releases |
+
+### بناء نسخة جديدة
+عدّل الكود ← `git tag v1.1 && git push --tags` ← الملفات تنزل بالـ Releases تلقائياً.
+
+> **توقيع الأندرويد الثابت (اختياري):** حتى تنصّب التحديثات فوق النسخة القديمة بدون حذف، أضف بإعدادات المستودع (Settings ▸ Secrets ▸ Actions) سرّين: `ANDROID_KEYSTORE_B64` (ملف jks بصيغة base64) و `ANDROID_KEYSTORE_PASSWORD`، والـ alias يكون `ibracastle`.
+
 ---
+
+# نسخة Unity (اختيارية)
 
 ## المميزات
 - وضع القلعة على أي سطح مستوي (AR Plane Detection + ARAnchor) مع سلايدر حجم الساحة

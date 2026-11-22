@@ -115,6 +115,14 @@ class Mesh(private val vertices: FloatArray) {
     val vertexCount = vertices.size / 9
     private var vbo = 0
 
+    init { all.add(this) }
+
+    companion object {
+        private val all = ArrayList<Mesh>()
+        /** بعد ضياع سياق OpenGL (رجوع للتطبيق) نعيد رفع المجسمات. */
+        fun invalidateAll() { for (m in all) m.vbo = 0 }
+    }
+
     fun upload() {
         if (vbo != 0) return
         val buf: FloatBuffer = ByteBuffer.allocateDirect(vertices.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()

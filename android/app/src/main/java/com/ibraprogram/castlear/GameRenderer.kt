@@ -67,10 +67,15 @@ class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Rend
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         try {
             bg.init(); planes.init(); shader.init()
-            Models.build(13, 13)
-            game = Game()
-            reticleNode.mesh = Models.reticle
-            previewRoot.add(Node(Models.castle))
+            if (game == null) {
+                Models.build(13, 13)
+                game = Game()
+                reticleNode.mesh = Models.reticle
+                previewRoot.add(Node(Models.castle))
+            } else {
+                Mesh.invalidateAll() // سياق جديد: نعيد رفع المجسمات ونحافظ على اللعبة
+            }
+            session?.setCameraTextureName(bg.textureId)
         } catch (t: Throwable) {
             Log.e("IbraCastle", "init", t)
             errorText = t.message

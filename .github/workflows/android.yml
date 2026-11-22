@@ -2,8 +2,13 @@ name: Android APK
 
 on:
   push:
+    tags: ["v*"]
+    branches: ["main"]
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -49,3 +54,11 @@ jobs:
         with:
           name: IBRA-CASTLE-AR-android
           path: IBRA-CASTLE-AR.apk
+
+      - name: Publish to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: IBRA-CASTLE-AR.apk
+          name: "IBRA CASTLE AR ${{ github.ref_name }}"
+          body_path: RELEASE_NOTES.md
