@@ -2,13 +2,10 @@ name: iOS IPA
 
 on:
   push:
-    tags: ["v*"]
     branches: ["main"]
     paths: ["ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
-
-permissions:
-  contents: write
+  workflow_call:
 
 jobs:
   build:
@@ -42,10 +39,3 @@ jobs:
           name: IBRA-CASTLE-AR-ios
           path: IBRA-CASTLE-AR.ipa
 
-      - name: Publish to Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: IBRA-CASTLE-AR.ipa
-          name: "IBRA CASTLE AR ${{ github.ref_name }}"
-          body_path: RELEASE_NOTES.md

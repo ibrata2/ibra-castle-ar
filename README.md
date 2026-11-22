@@ -16,10 +16,10 @@
 | `android/` | **النسخة الأصلية للأندرويد** — Kotlin + ARCore + OpenGL ES (مجسمات كرتونية مبنية بالكود) |
 | `ios/` | **النسخة الأصلية للآيفون** — Swift + ARKit + SceneKit |
 | `Assets/IbraCastle/` | نسخة Unity (AR Foundation) — اختيارية لمن يريد يطوّر بالـ Unity |
-| `.github/workflows/` | بناء APK و IPA تلقائياً على GitHub Actions، وأي Tag يبدأ بـ `v` ينشرهم بالـ Releases |
+| `.github/workflows/` | بناء APK و IPA تلقائياً على GitHub Actions، وتغيير ملف `VERSION` ينشرهم بالـ Releases |
 
 ### بناء نسخة جديدة
-عدّل الكود ← `git tag v1.1 && git push --tags` ← الملفات تنزل بالـ Releases تلقائياً.
+عدّل الكود ← غيّر الرقم بملف `VERSION` (مثلاً 1.1) وادفع ← الملفات تنزل بالـ Releases تلقائياً.
 
 > **توقيع الأندرويد الثابت (اختياري):** حتى تنصّب التحديثات فوق النسخة القديمة بدون حذف، أضف بإعدادات المستودع (Settings ▸ Secrets ▸ Actions) سرّين: `ANDROID_KEYSTORE_B64` (ملف jks بصيغة base64) و `ANDROID_KEYSTORE_PASSWORD`، والـ alias يكون `ibracastle`.
 

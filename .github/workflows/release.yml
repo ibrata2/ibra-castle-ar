@@ -1,0 +1,39 @@
+name: Release
+
+# غيّر الرقم بملف VERSION وادفع على main ← يبني APK و IPA وينشرهم بالـ Releases
+on:
+  push:
+    branches: ["main"]
+    paths: ["VERSION"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+  ios:
+    uses: ./.github/workflows/ios.yml
+
+  publish:
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Read version
+        run: echo "VER=$(tr -d ' \n\r' < VERSION)" >> $GITHUB_ENV
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VER }}
+          target_commitish: ${{ github.sha }}
+          name: IBRA CASTLE AR v${{ env.VER }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            dist/IBRA-CASTLE-AR.apk
+            dist/IBRA-CASTLE-AR.ipa
