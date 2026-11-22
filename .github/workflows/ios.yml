@@ -31,8 +31,13 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -R ios/build/Build/Products/Release-iphoneos/IbraCastle.app Payload/
-          zip -qry IBRA-CASTLE-AR.ipa Payload
+          ditto "$(cd ios/build/Build/Products/Release-iphoneos && pwd -P)/IbraCastle.app/" Payload/IbraCastle.app/ || \
+            cp -RL ios/build/Build/Products/Release-iphoneos/IbraCastle.app Payload/
+          ls -la Payload/IbraCastle.app | head -20
+          test -f Payload/IbraCastle.app/IbraCastle
+          zip -qr IBRA-CASTLE-AR.ipa Payload
+          ls -la IBRA-CASTLE-AR.ipa
+          test $(stat -f%z IBRA-CASTLE-AR.ipa) -gt 100000
 
       - uses: actions/upload-artifact@v4
         with:
