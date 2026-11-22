@@ -17,3 +17,5 @@
 *.aab
 *.ipa
 .DS_Store
+ios/build/
+ios/*.xcodeproj/
