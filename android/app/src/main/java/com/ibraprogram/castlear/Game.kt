@@ -120,6 +120,7 @@ class Game {
         const val CASTLE_HP = 500f
         const val TOTAL_WAVES = 10
         const val TAP_DAMAGE = 10f
+        const val HAND_DAMAGE = 14f
         const val TOWER_RANGE = 3.5f
         const val TOWER_RATE = 1.2f
         const val TOWER_DMG = 10f
@@ -363,18 +364,33 @@ class Game {
     // ───────────── اللمس للضرب ─────────────
     fun tap(ray: Ray) {
         if (!isPlaying || tapCooldown > 0f) return
+        tapCooldown = 0.2f
+        if (hitAt(ray, 0.45f, TAP_DAMAGE)) hitSeq++
+    }
+
+    private var handCooldown = 0f
+
+    /** ضربة بالإيد الحقيقية — مدى أوسع وضرر أكبر شوية. */
+    fun handHit(ray: Ray): Boolean {
+        if (!isPlaying || handCooldown > 0f) return false
+        handCooldown = 0.25f
+        val ok = hitAt(ray, 0.75f, HAND_DAMAGE)
+        if (ok) hitSeq++
+        return ok
+    }
+
+    private fun hitAt(ray: Ray, radius: Float, dmg: Float): Boolean {
         var best: Enemy? = null; var bestT = Float.MAX_VALUE
         for (e in enemies) {
             if (e.dead) continue
             val c = e.node.pos + V3(0f, 0.4f * e.type.size, 0f)
-            val t = ray.hitSphere(c, 0.45f * e.type.size) ?: continue
+            val t = ray.hitSphere(c, radius * e.type.size) ?: continue
             if (t < bestT) { bestT = t; best = e }
         }
-        tapCooldown = 0.2f
-        val e = best ?: return
-        damageEnemy(e, TAP_DAMAGE)
+        val e = best ?: return false
+        damageEnemy(e, dmg)
         spawnFx(Models.spark, ray.at(bestT), 0.25f, V3.ZERO, 0.45f)
-        hitSeq++
+        return true
     }
 
     private fun damageEnemy(e: Enemy, dmg: Float) {
@@ -406,6 +422,7 @@ class Game {
         val dt = min(dtIn, 0.05f)
         Node.billboardYaw = yawOf(camLocal.flat())
         tapCooldown -= dt
+        handCooldown -= dt
         updateFx(dt)
         updateBuildingsVisual(dt)
         castleFlash = max(0f, castleFlash - dt)

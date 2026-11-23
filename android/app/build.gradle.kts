@@ -11,8 +11,9 @@ android {
         applicationId = "com.ibraprogram.castlear"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -40,6 +41,8 @@ android {
         }
     }
 
+    androidResources { noCompress += "task" }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -49,6 +52,7 @@ android {
 
 dependencies {
     implementation("com.google.ar:core:1.44.0")
+    implementation("com.google.mediapipe:tasks-vision:0.10.14")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.13.1")
 }

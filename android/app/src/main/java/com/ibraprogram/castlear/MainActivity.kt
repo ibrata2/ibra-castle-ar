@@ -73,6 +73,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var endTitle: TextView
     private lateinit var endSub: TextView
     private val buildButtons = HashMap<BType, View>()
+    private lateinit var handButton: TextView
+    private lateinit var handHelp: TextView
+    private lateinit var handStatus: TextView
+    private var handTracker: HandTracker? = null
+    private var lastHandEventSeq = 0
 
     private val ui = Handler(Looper.getMainLooper())
     private var lastToastSeq = 0
@@ -92,6 +97,8 @@ class MainActivity : AppCompatActivity() {
             setRenderer(renderer)
             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         }
+        handTracker = HandTracker(this)
+        renderer.hand = handTracker
         setContentView(buildUi())
         ui.post(poll)
     }
@@ -149,6 +156,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         ui.removeCallbacksAndMessages(null)
+        handTracker?.close()
         session?.close()
         session = null
     }
@@ -220,6 +228,35 @@ class MainActivity : AppCompatActivity() {
 
         if (g.hitSeq != lastHitSeq) { lastHitSeq = g.hitSeq; vibrate(18) }
 
+        // ── وضع الإيد ──
+        val handOn = renderer.handMode
+        val handErr = handTracker?.error
+        handButton.visibility = if (renderer.placed && handErr == null) View.VISIBLE else View.GONE
+        handButton.alpha = if (handOn) 1f else 0.5f
+        handButton.background = rounded(if (handOn) 0xFF2B2410.toInt() else PANEL, 22f, if (handOn) GOLD else GOLD_SOFT)
+        handHelp.visibility = if (renderer.placed && handOn && playing && handErr == null) View.VISIBLE else View.GONE
+        handStatus.visibility = handHelp.visibility
+        handStatus.text = when {
+            handTracker?.ready != true -> "✋ جاري تجهيز التعرف على الإيد…"
+            renderer.handPinching -> "🤏 ماسك ${renderer.selectedType.label}"
+            renderer.handSeen -> "✋ شايف إيدك — المختار: ${renderer.selectedType.label}"
+            else -> "✋ دخّل إيدك قدام الكاميرا"
+        }
+        handStatus.setTextColor(if (renderer.handSeen) 0xFF8CE99A.toInt() else Color.WHITE)
+        for ((t, v) in buildButtons) {
+            val sel = handOn && t == renderer.selectedType
+            v.background = rounded(0xFF1C1C22.toInt(), 16f, if (sel) 0xFFFFD43B.toInt() else GOLD_SOFT)
+            v.scaleX = if (sel) 1.06f else 1f; v.scaleY = v.scaleX
+        }
+        if (renderer.handEventSeq != lastHandEventSeq) {
+            lastHandEventSeq = renderer.handEventSeq
+            when (renderer.handEvent) {
+                "select" -> { showToast("${emojiOf(renderer.selectedType)} ${renderer.selectedType.label} — اكمش حتى تبني"); vibrate(12) }
+                "wave" -> { showToast("👍 بدأت الموجة!"); vibrate(30) }
+                "hit" -> vibrate(25)
+            }
+        }
+
         when (state) {
             GameState.GAME_OVER -> {
                 endPanel.visibility = View.VISIBLE
@@ -233,6 +270,14 @@ class MainActivity : AppCompatActivity() {
             }
             else -> endPanel.visibility = View.GONE
         }
+    }
+
+    private fun emojiOf(t: BType) = when (t) { BType.WALL -> "☝️"; BType.TOWER -> "✌️"; BType.SPIKE -> "🤟" }
+
+    private fun showToast(msg: String) {
+        toast.text = msg
+        toast.visibility = View.VISIBLE
+        toastHideAt = System.currentTimeMillis() + 2200
     }
 
     @Suppress("DEPRECATION")
@@ -329,6 +374,34 @@ class MainActivity : AppCompatActivity() {
         root.addView(about, FrameLayout.LayoutParams(dpi(44f), dpi(44f), Gravity.TOP or Gravity.START).apply {
             topMargin = dpi(96f); marginStart = dpi(12f)
         })
+
+        // ── هيكل الإيد فوق الكاميرا ──
+        root.addView(HandOverlay(this, { if (renderer.handMode) renderer.handViewPts else null }, { renderer.handPinching }),
+            FrameLayout.LayoutParams(-1, -1))
+
+        // زر وضع الإيد
+        handButton = label("✋", 22f).apply {
+            setOnClickListener {
+                renderer.handMode = !renderer.handMode
+                showToast(if (renderer.handMode) "✋ التحكم بالإيد شغّال" else "👆 التحكم باللمس فقط")
+            }
+            visibility = View.GONE
+        }
+        root.addView(handButton, FrameLayout.LayoutParams(dpi(44f), dpi(44f), Gravity.TOP or Gravity.START).apply {
+            topMargin = dpi(148f); marginStart = dpi(12f)
+        })
+        handStatus = label("", 13f, Color.WHITE).apply {
+            background = rounded(PANEL, 12f)
+            setPadding(dpi(10f), dpi(4f), dpi(10f), dpi(4f))
+            visibility = View.GONE
+        }
+        root.addView(handStatus, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dpi(100f) })
+        handHelp = label("☝️ جدار   ✌️ برج   🤟 فخ\n🤏 اكمش وحرّك وافتح = بناء   👋 اضرب بسرعة   👍 الموجة", 11.5f, Color.WHITE, false).apply {
+            background = rounded(0xB0101014.toInt(), 12f)
+            setPadding(dpi(10f), dpi(5f), dpi(10f), dpi(5f))
+            visibility = View.GONE
+        }
+        root.addView(handHelp, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dpi(178f) })
 
         // ── التلميح والتوست ──
         hint = label("", 17f, Color.WHITE).apply {

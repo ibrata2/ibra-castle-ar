@@ -40,6 +40,13 @@ jobs:
           echo "KEY_ALIAS=ibracastle" >> $GITHUB_ENV
           echo "KEY_PASSWORD=$PW" >> $GITHUB_ENV
 
+      - name: Download hand model (MediaPipe)
+        run: |
+          mkdir -p android/app/src/main/assets
+          curl -fL --retry 3 -o android/app/src/main/assets/hand_landmarker.task \
+            https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+          ls -la android/app/src/main/assets
+
       - name: Build APK
         working-directory: android
         run: gradle assembleRelease --no-daemon --stacktrace

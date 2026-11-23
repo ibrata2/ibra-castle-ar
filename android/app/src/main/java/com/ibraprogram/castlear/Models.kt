@@ -31,6 +31,7 @@ object Models {
     lateinit var puff: Mesh
     lateinit var spark: Mesh
     lateinit var coin: Mesh
+    lateinit var cursor: Mesh
 
     fun build(gridW: Int, gridH: Int) {
         ground = buildGround(gridW, gridH)
@@ -70,6 +71,14 @@ object Models {
         }.build()
         puff = MeshBuilder().apply { sphere(V3.ZERO, 0.5f, 0xF1F3F5, 6, 4) }.build()
         spark = MeshBuilder().apply { sphere(V3.ZERO, 0.5f, 0xFFE066, 6, 4) }.build()
+        cursor = MeshBuilder().apply {
+            // حلقة ذهبية على الأرض تحت إصبعك
+            for (i in 0 until 16) {
+                val a = i / 16f * 2f * Math.PI.toFloat()
+                box(kotlin.math.cos(a) * 0.38f, 0.02f, kotlin.math.sin(a) * 0.38f, 0.16f, 0.04f, 0.07f, GOLD)
+            }
+            cylinder(V3(0f, 0f, 0f), 0.09f, 0.05f, WHITE, 10)
+        }.build()
         coin = MeshBuilder().apply { cylinder(V3(-0.03f, 0f, 0f), 0.14f, 0.06f, GOLD, 10, Axis.X, 0xFFE38A) }.build()
     }
 

@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import android.util.Log
 import com.google.ar.core.Anchor
+import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
@@ -28,7 +29,7 @@ sealed class Cmd {
  * حلقة الرسم: الكاميرا ← الأسطح/العلامة ← الساحة واللعبة.
  * كل أوامر اللمس تنحط بطابور وتتنفذ هنا على خيط OpenGL (بدون تضارب).
  */
-class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Renderer {
+class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Renderer, GestureEngine.Listener {
     @Volatile var session: Session? = null
     val commands = ConcurrentLinkedQueue<Cmd>()
 
@@ -43,6 +44,22 @@ class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Rend
     @Volatile var tracking = false
     @Volatile var placed = false
     @Volatile var errorText: String? = null
+
+    // ── التحكم بالإيد ──
+    var hand: HandTracker? = null
+    private val gestures = GestureEngine()
+    @Volatile var handMode = true
+    @Volatile var selectedType = BType.TOWER
+    @Volatile var handSeen = false
+    /** نقاط الإيد بإحداثيات الشاشة للرسم فوق الكاميرا. */
+    @Volatile var handViewPts: FloatArray? = null
+    @Volatile var handPinching = false
+    @Volatile var handEvent: String? = null
+    @Volatile var handEventSeq = 0
+    private var lastHandSeq = -1
+    private val cursorNode = Node()
+    private var cursorVisible = false
+    private var cursorPinch = false
 
     private var viewW = 1
     private var viewH = 1
@@ -72,6 +89,7 @@ class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Rend
                 game = Game()
                 reticleNode.mesh = Models.reticle
                 previewRoot.add(Node(Models.castle))
+                cursorNode.mesh = Models.cursor
             } else {
                 Mesh.invalidateAll() // سياق جديد: نعيد رفع المجسمات ونحافظ على اللعبة
             }
@@ -132,12 +150,19 @@ class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Rend
             }
 
             processCommands(frame, g)
+            updateHand(frame, g)
 
             val camPos = cam.pose.translation
             val camLocal = transformPoint(boardInv, camPos[0], camPos[1], camPos[2])
             g.update(dt, camLocal)
 
             drawNode(g.root, board)
+            if (cursorVisible && handMode) {
+                val pulse = if (cursorPinch) 0.8f else 1f + 0.08f * kotlin.math.sin(System.nanoTime() / 1.5e8).toFloat()
+                cursorNode.setScale(pulse)
+                cursorNode.tint = if (cursorPinch) floatArrayOf(0.6f, 1.4f, 0.6f) else floatArrayOf(1f, 1f, 1f)
+                drawNode(cursorNode, board)
+            }
         } catch (t: Throwable) {
             Log.e("IbraCastle", "frame", t)
         }
@@ -237,6 +262,70 @@ class GameRenderer(private val rotationProvider: () -> Int) : GLSurfaceView.Rend
         val d = (f - o).norm()
         if (d.lenSq() < 1e-8f) return null
         return Ray(o, d)
+    }
+
+    // ───────────── الإيد ─────────────
+    private fun updateHand(frame: Frame, g: Game) {
+        val h = hand
+        if (!handMode || h == null || !h.ready) {
+            if (handSeen) { gestures.lost(this); handSeen = false; handViewPts = null; cursorVisible = false }
+            return
+        }
+        h.submit(frame)
+        val now = System.currentTimeMillis()
+        if (now - h.latestTime > 400) {
+            if (handSeen) { gestures.lost(this); handSeen = false; handViewPts = null; cursorVisible = false }
+            return
+        }
+        if (h.seq == lastHandSeq) return
+        lastHandSeq = h.seq
+        val img = h.latestPoints() ?: return
+        val view = FloatArray(42)
+        frame.transformCoordinates2d(Coordinates2d.IMAGE_PIXELS, img, Coordinates2d.VIEW, view)
+        handViewPts = view
+        handSeen = true
+        gestures.update(view, h.latestTime, viewH.toFloat(), this)
+        handPinching = gestures.pinching
+    }
+
+    private fun handGround(x: Float, y: Float): V3? = screenRay(x, y)?.hitPlaneY(0f)
+
+    override fun onCursor(x: Float, y: Float, pinching: Boolean) {
+        val p = handGround(x, y)
+        val g = game
+        cursorVisible = p != null && g != null && g.inBounds(g.cellOf(p))
+        if (p != null) cursorNode.pos = V3(p.x, 0.05f, p.z)
+        cursorPinch = pinching
+    }
+
+    override fun onHit(x: Float, y: Float) {
+        val g = game ?: return
+        val r = screenRay(x, y) ?: return
+        if (g.handHit(r)) { handEvent = "hit"; handEventSeq++ }
+    }
+
+    override fun onSelect(type: BType) {
+        selectedType = type
+        handEvent = "select"; handEventSeq++
+    }
+
+    override fun onPinchStart(x: Float, y: Float) {
+        val g = game ?: return
+        g.beginGhost(selectedType)
+        g.moveGhost(handGround(x, y))
+    }
+
+    override fun onPinchMove(x: Float, y: Float) { game?.moveGhost(handGround(x, y)) }
+
+    override fun onPinchEnd(x: Float, y: Float, place: Boolean) {
+        val g = game ?: return
+        if (place) g.moveGhost(handGround(x, y))
+        g.endGhost(place)
+    }
+
+    override fun onThumbsUp() {
+        val g = game ?: return
+        if (g.state == GameState.BUILDING) { g.startWave(); handEvent = "wave"; handEventSeq++ }
     }
 
     private fun groundPoint(x: Float, y: Float): V3? {
