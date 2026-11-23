@@ -390,16 +390,30 @@ final class Game {
     // MARK: اللمس للضرب
     func tap(_ ray: Ray) {
         guard isPlaying, tapCooldown <= 0 else { return }
+        tapCooldown = 0.2
+        if hitAt(ray, radius: 0.45, dmg: Game.tapDamage) { onHit?() }
+    }
+
+    private var handCooldown: Float = 0
+
+    /// ضربة بالإيد الحقيقية — مدى أوسع وضرر أكبر شوية.
+    @discardableResult
+    func handHit(_ ray: Ray) -> Bool {
+        guard isPlaying, handCooldown <= 0 else { return false }
+        handCooldown = 0.25
+        return hitAt(ray, radius: 0.75, dmg: 14)
+    }
+
+    private func hitAt(_ ray: Ray, radius: Float, dmg: Float) -> Bool {
         var best: Enemy?; var bestT = Float.greatestFiniteMagnitude
         for e in enemies where !e.dead {
             let c = e.pos + V3(0, 0.4 * e.type.size, 0)
-            if let t = ray.hitSphere(c, 0.45 * e.type.size), t < bestT { bestT = t; best = e }
+            if let t = ray.hitSphere(c, radius * e.type.size), t < bestT { bestT = t; best = e }
         }
-        tapCooldown = 0.2
-        guard let e = best else { return }
-        damageEnemy(e, Game.tapDamage)
+        guard let e = best else { return false }
+        damageEnemy(e, dmg)
         spawnFx(Models.spark, ray.at(bestT), 0.25, .zero, 0.45)
-        onHit?()
+        return true
     }
 
     private func damageEnemy(_ e: Enemy, _ dmg: Float) {
@@ -431,6 +445,7 @@ final class Game {
     func update(_ dtIn: Float) {
         let dt = min(dtIn, 0.05)
         tapCooldown -= dt
+        handCooldown -= dt
         updateFx(dt)
         updateBuildingsVisual(dt)
         castleFlash = max(0, castleFlash - dt)

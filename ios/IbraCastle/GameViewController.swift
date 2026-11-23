@@ -4,7 +4,7 @@ import UIKit
 
 /// IBRA CASTLE AR — شاشة اللعبة: كاميرا ARKit + SceneKit + الواجهة العربية.
 /// برمجة وتطوير ابراهيم الخزرجي
-final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingOverlayViewDelegate {
+final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingOverlayViewDelegate, GestureListener {
 
     static let gold = UIColor(red: 0.83, green: 0.69, blue: 0.22, alpha: 1)
     static let goldSoft = UIColor(red: 0.79, green: 0.66, blue: 0.30, alpha: 1)
@@ -43,6 +43,19 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
     private var buildButtons: [BType: BuildButtonView] = [:]
     private var toastHideAt: CFTimeInterval = 0
 
+    // التحكم بالإيد
+    private let hand = HandTracker()
+    private let gestures = GestureEngine()
+    private var handMode = true
+    private var selectedType: BType = .tower
+    private var handSeen = false
+    private var lastHandTime: CFTimeInterval = 0
+    private let overlay = HandOverlayView()
+    private let cursorNode = SCNNode()
+    private let handButton = UIButton(type: .system)
+    private let handHelp = UILabel()
+    private let handStatus = UILabel()
+
     override init(nibName: String?, bundle: Bundle?) {
         Models.build(w: 13, h: 13)
         game = Game()
@@ -74,6 +87,14 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
         reticleNode.addChildNode(preview)
         reticleNode.isHidden = true
         sceneView.scene.rootNode.addChildNode(reticleNode)
+
+        // حلقة ذهبية على الساحة تحت إصبعك
+        let ring = SCNTorus(ringRadius: 0.38, pipeRadius: 0.05)
+        ring.firstMaterial = Models.unlit(0xFFC93C)
+        cursorNode.geometry = ring
+        cursorNode.isHidden = true
+        boardNode.addChildNode(cursorNode)
+        hand.onResult = { [weak self] pts in self?.handleHand(pts) }
 
         game.onToast = { [weak self] msg in self?.showToast(msg) }
         game.onHit = { [weak self] in self?.haptic.impactOccurred() }
@@ -134,7 +155,17 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
         lastTime = now
 
         if !placed { updateReticle() }
-        else { game.update(Float(dt)) }
+        else {
+            if handMode, let f = sceneView.session.currentFrame { hand.submit(f) }
+            if handSeen && (now - lastHandTime > 0.4 || !handMode) {
+                handSeen = false; gestures.lost(self); overlay.points = nil; cursorNode.isHidden = true
+            }
+            if !cursorNode.isHidden {
+                let s = gestures.pinching ? 0.8 : 1 + 0.08 * sin(Float(now) * 7)
+                cursorNode.simdScale = SIMD3(repeating: Float(s))
+            }
+            game.update(Float(dt))
+        }
         refreshUI()
     }
 
@@ -216,6 +247,62 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
         return Ray(origin: o, dir: simd_normalize(f - o))
     }
 
+    // MARK: الإيد
+    private func handleHand(_ pts: [CGPoint]?) {
+        guard placed, handMode, let pts = pts, let frame = sceneView.session.currentFrame else { return }
+        let size = sceneView.bounds.size
+        let t = frame.displayTransform(for: .portrait, viewportSize: size)
+        let view = pts.map { p -> CGPoint in
+            let n = p.applying(t)
+            return CGPoint(x: n.x * size.width, y: n.y * size.height)
+        }
+        handSeen = true
+        lastHandTime = CACurrentMediaTime()
+        overlay.pinching = gestures.pinching
+        overlay.points = view
+        gestures.update(view, t: lastHandTime, viewH: size.height, self)
+    }
+
+    private func handGround(_ p: CGPoint) -> V3? { screenRay(p).hitPlaneY(0) }
+
+    func onCursor(_ p: CGPoint, pinching: Bool) {
+        guard let g = handGround(p), game.inBounds(game.cellOf(g)) else { cursorNode.isHidden = true; return }
+        cursorNode.isHidden = false
+        cursorNode.simdPosition = V3(g.x, 0.06, g.z)
+        cursorNode.geometry?.firstMaterial = Models.unlit(pinching ? 0x51CF66 : 0xFFC93C)
+    }
+
+    func onHit(_ p: CGPoint) {
+        if game.handHit(screenRay(p)) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+    }
+
+    func onSelect(_ t: BType) {
+        selectedType = t
+        showToast("\(emoji(t)) \(t.label) — اكمش حتى تبني")
+        haptic.impactOccurred()
+    }
+
+    func onPinchStart(_ p: CGPoint) { game.beginGhost(selectedType); game.moveGhost(handGround(p)) }
+    func onPinchMove(_ p: CGPoint) { game.moveGhost(handGround(p)) }
+    func onPinchEnd(_ p: CGPoint, place: Bool) {
+        if place { game.moveGhost(handGround(p)) }
+        game.endGhost(place: place)
+    }
+    func onThumbsUp() {
+        if game.state == .building {
+            game.startWave()
+            showToast("👍 بدأت الموجة!")
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+    }
+
+    private func emoji(_ t: BType) -> String { t == .wall ? "☝️" : t == .tower ? "✌️" : "🤟" }
+
+    @objc private func toggleHand() {
+        handMode.toggle()
+        showToast(handMode ? "✋ التحكم بالإيد شغّال" : "👆 التحكم باللمس فقط")
+    }
+
     private func groundPoint(_ p: CGPoint) -> V3? {
         screenRay(CGPoint(x: p.x, y: p.y - sceneView.bounds.height * 0.06)).hitPlaneY(0)
     }
@@ -250,7 +337,20 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
         waveLabel.text = " 🌊 \(game.wave)/\(Game.totalWaves) "
         enemiesLabel.text = " ⚔ \(game.enemiesLeft) "
         hpBar.progress = game.castleHp / Game.castleMaxHp
-        for (t, b) in buildButtons { b.alpha = game.gold >= t.cost ? 1 : 0.4 }
+        for (t, b) in buildButtons {
+            b.alpha = game.gold >= t.cost ? 1 : 0.4
+            let sel = handMode && t == selectedType
+            b.layer.borderColor = (sel ? UIColor(red: 1, green: 0.83, blue: 0.23, alpha: 1) : GameViewController.goldSoft).cgColor
+            b.layer.borderWidth = sel ? 3 : 1.5
+        }
+        handButton.isHidden = !placed
+        handButton.alpha = handMode ? 1 : 0.5
+        handButton.layer.borderColor = (handMode ? GameViewController.gold : GameViewController.goldSoft).cgColor
+        handHelp.isHidden = !(placed && handMode && playing)
+        handStatus.isHidden = handHelp.isHidden
+        handStatus.text = gestures.pinching ? "  🤏 ماسك \(selectedType.label)  "
+            : handSeen ? "  ✋ شايف إيدك — المختار: \(selectedType.label)  " : "  ✋ دخّل إيدك قدام الكاميرا  "
+        handStatus.textColor = handSeen ? UIColor(red: 0.55, green: 0.91, blue: 0.6, alpha: 1) : .white
         if !toast.isHidden && CACurrentMediaTime() > toastHideAt { toast.isHidden = true }
 
         switch game.state {
@@ -355,6 +455,44 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
             about.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12)
         ])
 
+        // هيكل الإيد
+        overlay.frame = view.bounds
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(overlay)
+
+        // زر وضع الإيد
+        handButton.setTitle("✋", for: .normal)
+        handButton.titleLabel?.font = .systemFont(ofSize: 22)
+        panelStyle(handButton, radius: 22)
+        handButton.addTarget(self, action: #selector(toggleHand), for: .touchUpInside)
+        handButton.isHidden = true
+        pin(handButton)
+        NSLayoutConstraint.activate([
+            handButton.widthAnchor.constraint(equalToConstant: 44), handButton.heightAnchor.constraint(equalToConstant: 44),
+            handButton.topAnchor.constraint(equalTo: about.bottomAnchor, constant: 10),
+            handButton.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12)
+        ])
+        handStatus.font = .boldSystemFont(ofSize: 13)
+        handStatus.textAlignment = .center
+        handStatus.backgroundColor = GameViewController.panel
+        handStatus.layer.cornerRadius = 11; handStatus.clipsToBounds = true
+        handStatus.isHidden = true
+        pin(handStatus)
+        NSLayoutConstraint.activate([
+            handStatus.topAnchor.constraint(equalTo: hud.bottomAnchor, constant: 8),
+            handStatus.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            handStatus.heightAnchor.constraint(equalToConstant: 26)
+        ])
+        handHelp.text = "☝️ جدار   ✌️ برج   🤟 فخ\n🤏 اكمش وحرّك وافتح = بناء   👋 اضرب بسرعة   👍 الموجة"
+        handHelp.numberOfLines = 2
+        handHelp.font = .systemFont(ofSize: 11.5)
+        handHelp.textColor = .white
+        handHelp.textAlignment = .center
+        handHelp.backgroundColor = UIColor(red: 0.06, green: 0.06, blue: 0.08, alpha: 0.7)
+        handHelp.layer.cornerRadius = 12; handHelp.clipsToBounds = true
+        handHelp.isHidden = true
+        pin(handHelp)
+
         // التلميح
         hint.textColor = .white
         hint.font = .boldSystemFont(ofSize: 17)
@@ -451,6 +589,11 @@ final class GameViewController: UIViewController, ARSCNViewDelegate, ARCoachingO
             wb.centerXAnchor.constraint(equalTo: view.centerXAnchor)
         ])
         waveButtonRef = wb
+        NSLayoutConstraint.activate([
+            handHelp.bottomAnchor.constraint(equalTo: wb.topAnchor, constant: -10),
+            handHelp.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            handHelp.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 12)
+        ])
 
         // شاشة النهاية
         endPanel.axis = .vertical; endPanel.spacing = 10; endPanel.alignment = .fill
@@ -576,7 +719,7 @@ final class AboutViewController: UIViewController {
         close.setTitleColor(.white, for: .normal)
         close.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
         box.addArrangedSubview(close)
-        box.addArrangedSubview(label("الإصدار 1.0", 12, .gray, bold: false))
+        box.addArrangedSubview(label("الإصدار 1.1", 12, .gray, bold: false))
 
         box.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(box)

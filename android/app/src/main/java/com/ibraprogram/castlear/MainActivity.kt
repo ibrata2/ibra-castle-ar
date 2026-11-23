@@ -535,7 +535,7 @@ class MainActivity : AppCompatActivity() {
         for ((txt, url) in links) {
             box.addView(goldButton(txt) { open(url) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dpi(10f) })
         }
-        box.addView(label("الإصدار 1.0", 12f, 0xFF888888.toInt(), false), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dpi(12f) })
+        box.addView(label("الإصدار 1.1", 12f, 0xFF888888.toInt(), false), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dpi(12f) })
         val dlg = AlertDialog.Builder(this).setView(box).create()
         dlg.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dlg.show()
